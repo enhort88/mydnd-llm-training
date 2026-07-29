@@ -19,7 +19,9 @@ Commands:
   ./mydnd.sh eval-director [quick|full]
   ./mydnd.sh eval-narrator [quick|full]
   ./mydnd.sh all                     prepare + audit + train + quick evaluations
-  ./mydnd.sh export [q8_0|q4_k_m]    Export the trained adapter to GGUF
+  ./mydnd.sh export [q8_0|q4_k_m]    Direct Unsloth GGUF export (needs a 16-bit base)
+  ./mydnd.sh export-from-gguf BASE_GGUF [OUTPUT]
+                                      Merge the LoRA into an existing E2B GGUF
   ./mydnd.sh regenerate-v3           Rebuild committed v3 generated packs
   ./mydnd.sh new-pack NAME [director|narrative]
 
@@ -73,6 +75,14 @@ case "$cmd" in
   export)
     quant="${2:-q8_0}"
     python export_gguf.py --config "$CONFIG" --quantization "$quant"
+    ;;
+  export-from-gguf)
+    base_gguf="${2:-}"
+    output="${3:-}"
+    [[ -n "$base_gguf" ]] || { echo "Base GGUF path is required" >&2; exit 2; }
+    args=(python export_gguf_from_base.py --base-gguf "$base_gguf")
+    [[ -n "$output" ]] && args+=(--output "$output")
+    "${args[@]}"
     ;;
   all)
     "$0" prepare
