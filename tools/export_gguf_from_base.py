@@ -87,22 +87,46 @@ def ensure_export_lora(llama_dir: Path) -> Path:
     return binary
 
 
+def enforce_f16_output_name(output: Path) -> Path:
+    """Export always produces F16; reject Q4-style names and require *F16.gguf."""
+    name = output.name
+    lower = name.lower()
+    if "q4" in lower:
+        raise SystemExit(
+            f"export refuses output names containing Q4: {name}\n"
+            "export always writes an F16 GGUF. Quantize separately:\n"
+            "  ./mydnd.sh quantize INPUT_F16 OUTPUT_Q4 [TYPE]"
+        )
+    if not lower.endswith("f16.gguf"):
+        raise SystemExit(
+            f"export output must end with F16.gguf (got: {name})\n"
+            "Example: outputs/mydnd-gemma-4-E2B-v3-F16.gguf"
+        )
+    return output
+
+
 def parse_args() -> argparse.Namespace:
     config_path = ROOT / "config" / "default.json"
     cfg = load_project_config(config_path)
     default_adapter = cfg.get("output_dir", "outputs/mydnd-e2b-v3-lora")
     default_base_hf = cfg.get("local_model_dir", "~/Models/MyDND/gemma-4-E2B-training")
+    default_output = ROOT / "outputs" / "mydnd-gemma-4-E2B-v3-F16.gguf"
 
     parser = argparse.ArgumentParser(
         description=(
             "Convert the MyDND PEFT adapter to GGUF LoRA and merge it into an "
-            "existing GGUF of the exact same Gemma 4 E2B base model."
+            "existing GGUF of the exact same Gemma 4 E2B base model. "
+            "Output is always F16 GGUF (suffix F16.gguf). Use ./mydnd.sh quantize for Q4."
         )
     )
     parser.add_argument("--base-gguf", required=True, help="Exact E2B base GGUF used for the merge")
     parser.add_argument("--adapter", default=default_adapter, help="LoRA adapter directory")
     parser.add_argument("--base-hf", default=default_base_hf, help="Local HF base directory used for training")
-    parser.add_argument("--output", help="Output merged GGUF path")
+    parser.add_argument(
+        "--output",
+        default=str(default_output),
+        help="Output merged F16 GGUF path (must end with F16.gguf; Q4 names rejected)",
+    )
     parser.add_argument("--llama-cpp-dir", default="tools/llama.cpp", help="Full llama.cpp checkout")
     parser.add_argument("--keep-lora-gguf", action="store_true", help="Keep intermediate GGUF LoRA")
     return parser.parse_args()
@@ -110,6 +134,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    # Name policy first: never accept Q4 labels for the F16 export stage.
+    output = enforce_f16_output_name(resolve_path(args.output))
     base_gguf = resolve_path(args.base_gguf)
     adapter = resolve_path(args.adapter)
     base_hf = resolve_path(args.base_hf)
@@ -123,10 +149,6 @@ def main() -> None:
         if not path.exists():
             raise SystemExit(f"Missing {description}: {path}")
 
-    if args.output:
-        output = resolve_path(args.output)
-    else:
-        output = ROOT / "outputs" / f"{base_gguf.stem}-mydnd-v3.gguf"
     output.parent.mkdir(parents=True, exist_ok=True)
 
     work_dir = ROOT / "outputs" / ".mydnd-gguf-export"
@@ -170,10 +192,12 @@ def main() -> None:
         lora_gguf.unlink(missing_ok=True)
 
     size_gib = output.stat().st_size / 1024**3
-    print("\nGGUF merge finished")
+    print("\nGGUF merge finished (F16 export stage)")
     print(f"Output: {output.resolve()}")
     print(f"Size:   {size_gib:.2f} GiB")
-    print("Important: the output keeps the base GGUF tensor quantization.")
+    print("Next: ./mydnd.sh quantize <this-F16.gguf> <output-Q4_0.gguf> [Q4_0]")
+    print("Important: use an F16/BF16 E2B base GGUF for a true F16 merge;")
+    print("llama-export-lora converts LoRA tensors to F16 but copies other base tensors as-is.")
     print("Use the exact E2B base checkpoint; an E4B or unrelated GGUF is incompatible.")
 
 
