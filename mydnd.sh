@@ -19,9 +19,8 @@ Commands:
   ./mydnd.sh eval-director [quick|full]
   ./mydnd.sh eval-narrator [quick|full]
   ./mydnd.sh all                     prepare + audit + train + quick evaluations
-  ./mydnd.sh export [q8_0|q4_k_m]    Direct Unsloth GGUF export (needs a 16-bit base)
-  ./mydnd.sh export-from-gguf BASE_GGUF [OUTPUT]
-                                      Merge the LoRA into an existing E2B GGUF
+  ./mydnd.sh export BASE_GGUF [OUTPUT]
+                                    Merge trained LoRA into an existing E2B GGUF
   ./mydnd.sh regenerate-v3           Rebuild committed v3 generated packs
   ./mydnd.sh new-pack NAME [director|narrative]
 
@@ -73,17 +72,37 @@ case "$cmd" in
       --report "reports/narrative-v3-${mode}.json" 2>&1 | tee "logs/narrative-v3-${mode}.log"
     ;;
   export)
-    quant="${2:-q8_0}"
-    python export_gguf.py --config "$CONFIG" --quantization "$quant"
-    ;;
-  export-from-gguf)
-    base_gguf="${2:-}"
-    output="${3:-}"
-    [[ -n "$base_gguf" ]] || { echo "Base GGUF path is required" >&2; exit 2; }
-    args=(python export_gguf_from_base.py --base-gguf "$base_gguf")
-    [[ -n "$output" ]] && args+=(--output "$output")
-    "${args[@]}"
-    ;;
+  base_gguf="${2:-}"
+  output="${3:-}"
+
+  base_hf="${MYDND_EXPORT_BASE_HF:-$HOME/Models/MyDND/gemma-4-E2B-it-BF16}"
+
+  [[ -n "$base_gguf" ]] || {
+    echo "Usage: ./mydnd.sh export BASE_GGUF [OUTPUT]" >&2
+    exit 2
+  }
+
+  [[ -f "$base_gguf" ]] || {
+    echo "Base GGUF not found: $base_gguf" >&2
+    exit 2
+  }
+
+  [[ -f "$base_hf/config.json" ]] || {
+    echo "BF16 HF base not found: $base_hf" >&2
+    echo "Expected config: $base_hf/config.json" >&2
+    exit 2
+  }
+
+  args=(
+    python tools/export_gguf_from_base.py
+    --base-hf "$base_hf"
+    --base-gguf "$base_gguf"
+  )
+
+  [[ -n "$output" ]] && args+=(--output "$output")
+
+  "${args[@]}"
+  ;;
   all)
     "$0" prepare
     "$0" audit
