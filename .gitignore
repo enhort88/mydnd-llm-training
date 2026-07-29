@@ -1,0 +1,26 @@
+# Local Python environment
+.venv/
+__pycache__/
+*.py[cod]
+
+# Models and Hugging Face cache
+models/
+.cache/
+*.gguf
+*.safetensors
+*.bin
+
+# Generated artifacts
+outputs/*
+!outputs/.gitkeep
+reports/*
+!reports/.gitkeep
+logs/*
+!logs/.gitkeep
+datasets/compiled/*
+!datasets/compiled/.gitkeep
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store

@@ -1,0 +1,14 @@
+# PyTorch/CUDA is intentionally not pinned here: keep the already working CUDA build.
+# Known working environment from the RTX 5070 experiment:
+transformers==5.5.0
+trl==0.24.0
+datasets==3.6.0
+peft==0.20.0
+bitsandbytes==0.50.0
+accelerate==1.14.0
+huggingface_hub==1.25.1
+sentencepiece==0.2.2
+protobuf==7.35.1
+tensorboard==2.21.0
+unsloth @ git+https://github.com/unslothai/unsloth.git@7f27d8eadd5e1437eb0d5cdab738e31014657179
+unsloth-zoo @ git+https://github.com/unslothai/unsloth-zoo.git@909260633a0cf00fe08d62874c73950841e1671c
