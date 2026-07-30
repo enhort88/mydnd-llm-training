@@ -1,0 +1,21 @@
+{
+  "project_name": "mydnd-e2b-v4-compact",
+  "base_model": "unsloth/gemma-4-E2B-it-unsloth-bnb-4bit",
+  "local_model_dir": "~/Models/MyDND/gemma-4-E2B-training",
+  "compiled_train": "datasets/compiled_v4/train.jsonl",
+  "director_eval": "datasets/compiled_v4/director_eval.jsonl",
+  "narrative_eval": "datasets/compiled_v4/narrative_eval.jsonl",
+  "output_dir": "outputs/mydnd-e2b-v4-compact-lora",
+  "max_seq_length": 1280,
+  "epochs": 1.0,
+  "learning_rate": 0.00002,
+  "batch_size": 1,
+  "gradient_accumulation": 8,
+  "lora_r": 8,
+  "seed": 240730,
+  "save_steps": 250,
+  "director_quick_limit": 320,
+  "narrative_quick_limit": 80,
+  "max_new_tokens_director": 96,
+  "max_new_tokens_narrative": 128
+}

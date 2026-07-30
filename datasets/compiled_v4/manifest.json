@@ -1,0 +1,16 @@
+{
+  "prompt_version": "v4-compact",
+  "packs": {
+    "datasets/packs/v2_director_core.jsonl": 1040,
+    "datasets/packs/v3_director_hard.jsonl": 480,
+    "datasets/packs/v3_narrative_diverse.jsonl": 360,
+    "datasets/packs/v4_mass_director.jsonl": 24000,
+    "datasets/packs/v4_mass_narrative.jsonl": 6000
+  },
+  "total_rows": 31880,
+  "train_rows": 22028,
+  "director_eval_rows": 5150,
+  "narrative_eval_rows": 432,
+  "families": 26432,
+  "duplicate_inputs_dropped": 4270
+}
