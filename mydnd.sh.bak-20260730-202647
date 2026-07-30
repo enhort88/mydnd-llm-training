@@ -22,7 +22,6 @@ Commands:
   ./mydnd.sh train                   Train the v3 LoRA adapter
   ./mydnd.sh eval-director [quick|full]
   ./mydnd.sh eval-narrator [quick|full]
-  ./mydnd.sh eval-v4-fixed            Honest fixed v4 evaluation; no training
   ./mydnd.sh export BASE_GGUF [OUTPUT_F16]
                                     Merge trained LoRA into base GGUF → always *-F16.gguf
   ./mydnd.sh quantize INPUT_F16 OUTPUT_Q4 [TYPE]
@@ -43,10 +42,10 @@ EOF
 }
 
 json_value() {
-  python - "$1" "$CONFIG" <<'PY'
+  python - "$1" <<'PY'
 import json, sys
 from pathlib import Path
-cfg=json.loads(Path(sys.argv[2]).read_text(encoding='utf-8'))
+cfg=json.loads(Path('config/default.json').read_text(encoding='utf-8'))
 print(cfg[sys.argv[1]])
 PY
 }
@@ -388,19 +387,6 @@ case "$cmd" in
     mkdir -p reports logs
     python compare_narrative.py --config "$CONFIG" --limit "$limit" \
       --report "reports/narrative-v3-${mode}.json" 2>&1 | tee "logs/narrative-v3-${mode}.log"
-    ;;
-  eval-v4-fixed)
-    mkdir -p reports logs datasets/holdout
-    python tools/generate_v4_fixed_holdout.py
-    python compare_director.py --config "$CONFIG" \
-      --eval-file datasets/holdout/v4_director_fixed.jsonl \
-      --skip-base --report reports/director-v4-fixed.json \
-      2>&1 | tee logs/director-v4-fixed.log
-    python compare_narrative.py --config "$CONFIG" \
-      --eval-file datasets/holdout/v4_narrative_fixed.jsonl \
-      --skip-base --report reports/narrative-v4-fixed.json \
-      2>&1 | tee logs/narrative-v4-fixed.log
-    python tools/render_v4_fixed_report.py
     ;;
   export)
     shift

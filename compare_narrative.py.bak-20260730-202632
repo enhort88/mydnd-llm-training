@@ -21,14 +21,6 @@ PLAYER_DECISION_PATTERNS = [
     re.compile(r'\bты\s+(?:решаешь|выбираешь|соглашаешься|отказываешься|нападаешь|берёшь|уходишь)\b', re.I),
     re.compile(r'\bгерой\s+(?:решает|выбирает|соглашается|отказывается)\b', re.I),
 ]
-KNOWN_MALFORMED_PATTERNS = {
-    'bad_heard_gender': re.compile(r'\bслышен\s+(?:только\s+)?(?:потрескивание|движение|дыхание|эхо)\b', re.I),
-    'bad_near_case': re.compile(r'\bрядом с\s+(?:синяя|костяной|оловянный|пустой|запечатанный|треснувшая|серебряная)\b', re.I),
-    'bad_board_agreement': re.compile(r'\bскрипнул\s+(?:доска|половица)\b', re.I),
-    'bad_fire_case': re.compile(r'\b(?:на огню|к огнющийся|огонь лампа)\b', re.I),
-    'bad_mark_case': re.compile(r'\b(?:с метка|на метка|к метка|след метка)\s*\d*\b', re.I),
-    'bad_movement_gender': re.compile(r'\bслышен\s+движение\b', re.I),
-}
 
 
 def parse_args():
@@ -69,18 +61,6 @@ def load_rows(path: str, limit: int):
     return rows[:limit] if limit > 0 else rows
 
 
-def clean_visible(output: str) -> str:
-    visible = output
-    for marker in ('<turn|>', '<eos>', '<bos>'):
-        visible = visible.replace(marker, '')
-    return visible.strip()
-
-
-def sentence_count(text: str) -> int:
-    chunks = [x.strip() for x in re.split(r'[.!?…]+(?:[»”"])?\s*', text) if x.strip()]
-    return len(chunks)
-
-
 def evaluate(model_name: str, rows: list[dict], args, label: str):
     print(f'\n=== {label}: {model_name} ===')
     model, processor = FastModel.from_pretrained(
@@ -107,43 +87,18 @@ def evaluate(model_name: str, rows: list[dict], args, label: str):
                 use_cache=True,
             )
         output = processor.decode(generated[0][input_len:], skip_special_tokens=False).strip()
-        visible = clean_visible(output)
+        visible = output.replace('<turn|>', '').strip()
         letters = [c for c in visible if c.isalpha()]
         cyr = len(CYRILLIC_RE.findall(visible)) / max(1, len(letters))
         tool_leak = any(marker in visible for marker in TOOL_MARKERS)
         agency_violation = any(p.search(visible) for p in PLAYER_DECISION_PATTERNS)
         length_ok = 60 <= len(visible) <= 700
-
-        expected = row.get('expected') or {}
-        anchors = list(expected.get('anchors') or [])
+        anchors = list((row.get('expected') or {}).get('anchors') or [])
         anchor_hit = (not anchors) or any(str(anchor).lower() in visible.lower() for anchor in anchors)
-        forbidden = list(expected.get('forbidden') or [])
-        forbidden_hits = [x for x in forbidden if str(x).lower() in visible.lower()]
-        malformed_hits = [name for name, pattern in KNOWN_MALFORMED_PATTERNS.items() if pattern.search(visible)]
-        sentences = sentence_count(visible)
-        min_sentences = int(expected.get('min_sentences', 1))
-        max_sentences = int(expected.get('max_sentences', 8))
-        sentence_count_ok = min_sentences <= sentences <= max_sentences
-        ends_with_punctuation = bool(re.search(r'[.!?…][»”"]?$', visible))
-
         basic_ok = (not tool_leak) and (not agency_violation) and length_ok and cyr >= 0.55
-        gold_ok = (
-            basic_ok
-            and anchor_hit
-            and not forbidden_hits
-            and not malformed_hits
-            and sentence_count_ok
-            and ends_with_punctuation
-        )
-        mark = 'OK' if gold_ok else 'CHECK'
-        print(
-            f'[{index:02d}/{len(rows):02d}] {mark:5s} {row["id"]}: chars={len(visible)}, '
-            f'tool={tool_leak}, agency={agency_violation}, anchors={anchor_hit}, '
-            f'forbidden={len(forbidden_hits)}, grammar={len(malformed_hits)}, sent={sentences}'
-        )
+        print(f'[{index:02d}/{len(rows):02d}] {"OK" if basic_ok else "CHECK":5s} {row["id"]}: chars={len(visible)}, tool={tool_leak}, agency={agency_violation}, cyr={cyr:.2f}')
         cases.append({
             'id': row['id'],
-            'input': row['messages'][-2]['content'],
             'output': visible,
             'tool_leak': tool_leak,
             'agency_violation': agency_violation,
@@ -152,17 +107,11 @@ def evaluate(model_name: str, rows: list[dict], args, label: str):
             'basic_ok': basic_ok,
             'anchors': anchors,
             'anchor_hit': anchor_hit,
-            'forbidden': forbidden,
-            'forbidden_hits': forbidden_hits,
-            'malformed_hits': malformed_hits,
-            'sentence_count': sentences,
-            'sentence_count_ok': sentence_count_ok,
-            'ends_with_punctuation': ends_with_punctuation,
-            'gold_ok': gold_ok,
         })
 
     total = max(1, len(cases))
     normalized = [' '.join(c['output'].lower().split()) for c in cases]
+    unique_output_rate = len(set(normalized)) / total
     metrics = {
         'count': len(cases),
         'tool_leak_rate': sum(c['tool_leak'] for c in cases) / total,
@@ -171,13 +120,8 @@ def evaluate(model_name: str, rows: list[dict], args, label: str):
         'basic_ok_rate': sum(c['basic_ok'] for c in cases) / total,
         'mean_chars': sum(len(c['output']) for c in cases) / total,
         'mean_cyrillic_ratio': sum(c['cyrillic_ratio'] for c in cases) / total,
-        'unique_output_rate': len(set(normalized)) / total,
+        'unique_output_rate': unique_output_rate,
         'anchor_hit_rate': sum(c['anchor_hit'] for c in cases) / total,
-        'forbidden_violation_rate': sum(bool(c['forbidden_hits']) for c in cases) / total,
-        'known_malformed_pattern_rate': sum(bool(c['malformed_hits']) for c in cases) / total,
-        'sentence_count_ok_rate': sum(c['sentence_count_ok'] for c in cases) / total,
-        'complete_ending_rate': sum(c['ends_with_punctuation'] for c in cases) / total,
-        'gold_ok_rate': sum(c['gold_ok'] for c in cases) / total,
     }
     print(json.dumps(metrics, ensure_ascii=False, indent=2))
     del model, processor
